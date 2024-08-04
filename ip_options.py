@@ -4,13 +4,14 @@ import os.path
 
 from scapy.all import *
 from scapy.layers.inet import *
+from scapy.fields import PacketListField
 
 
 def main() -> None:
     """
     Main method of the ip_options.py script. Requires a variety of user input to run.
     """
-
+    global VERBOSE
     destination_addr = ''
     source_addr = ''
     parser = argparse.ArgumentParser(description="A basic script with user input flags")
@@ -27,6 +28,7 @@ def main() -> None:
 
     # Parsing arguments
     args = parser.parse_args()
+    VERBOSE = args.verbose
 
     if args.client and (args.source is None or args.destination is None):
         parser.error("--client requires --source and --destination")
@@ -56,7 +58,7 @@ def main() -> None:
         print(f'Source Host: {source_addr}')
         print(f'Encoding file: {encoding_file}')
         print(f'Covert Channel Method: IP Options')
-        # send_message(destination_addr=destination_addr, source_addr=source_addr, file=encoding_file)
+        send_message(destination_addr=destination_addr, source_addr=source_addr, file=encoding_file)
     elif args.server:
         print(f'Covert Channel Application!')
         print(f'Server Mode: Listening for data!')
@@ -65,59 +67,77 @@ def main() -> None:
         print(f'Covert Channel Method: IP Options')
         # receive_message(source_addr=source_addr, output_file=encoding_file, timeout=args.timeout)
 
-    def encode_to_hex(character: chr) -> int:
-        """
-        Encodes ASCII characters into a bit integer.
-        :param character: To convert into an integer.
-        :return: bit integer.
-        """
-        # TODO implement encoding scheme
-        return ord(character)
+def encode_to_hex(character: chr) -> int:
+    """
+    Encodes ASCII characters into a bit integer.
+    :param character: To convert into an integer.
+    :return: bit integer.
+    """
+    # TODO implement encoding scheme
+    return ord(character)
 
-    def decode_to_ascii(num: int) -> chr:
-        """
-        Decode integer into ASCII characters.
-        :param num: integer.
-        :return: ASCII Character.
-        """
-        # TODO implement decoding scheme
+def decode_to_ascii(num: int) -> chr:
+    """
+    Decode integer into ASCII characters.
+    :param num: integer.
+    :return: ASCII Character.
+    """
+    # TODO implement decoding scheme
 
-        return ''.join(chr(int(num)))
+    return ''.join(chr(int(num)))
 
-    def send_message(destination_addr: str, source_addr: str, file) -> None:
-        """
-        Read a file and send an encoded message through the IP Options field.
-        :param destination_addr: Destination address of the packet.
-        :param source_addr: Source address of the packet.
-        :param file: File to read the message from.
-        """
-        with open(file, 'r') as buffer:
-            while True:
-                char = buffer.read(1)
-                if not char:
-                    break
-                print(f'Sending data: {char}')
-                encoded_id = encode_to_hex(char)
-                send(IP(dst=destination_addr, src=source_addr), verbose=VERBOSE)
+def send_message(destination_addr: str, source_addr: str, file) -> None:
+    """
+    Read a file and send an encoded message through the IP Options field.
+    :param destination_addr: Destination address of the packet.
+    :param source_addr: Source address of the packet.
+    :param file: File to read the message from.
+    """
+    index = 0
+    with open(file, 'r') as buffer:
+        while True:
+            char = buffer.read(1)
+            if not char:
+                break
+            print(f'Sending data: {char}')
+            encoded_id = encode_to_hex(char)
+            # TODO come up with encoding method
+            encode_options = IPOption(copy_flag=1, optclass=0, option=7, length=4+9*4, value=b'\x00' * 36)
+            encoded_packet = IP(dst=destination_addr, src=source_addr, id=0x1011, options=encode_options)
+            print(f"before padding: {len(encoded_packet)}")
+            if len(encoded_packet) % 32 != 0:
+                extra_bits = len(encoded_packet) % 32
+                pad = Padding()
+                pad.load = '\x00' * (32 - extra_bits)
+                encoded_packet = encoded_packet/pad
+                print(encoded_packet.fields)
+                print(f"after padding: {len(encoded_packet)}")
 
-    def packet_callback(pkt, source_addr, output_file) -> None:
-        """
-        Callback method to perform packet filtering using scapy sniff function.
-        :param pkt: Packet from sniff stream.
-        :param source_addr: Source address of the message.
-        :param output_file: File to write message to.
-        """
-        if IP in pkt and pkt[IP].src == source_addr:
-            print(f'Receiving Data: {decode_to_ascii(pkt[IP].option)}')
-            with open(output_file, 'a') as buffer:
-                buffer.write(f'Receiving Data: {decode_to_ascii(pkt[IP].option)}\n')
+            send(encoded_packet, verbose=VERBOSE)
+            index += 1
 
-    def receive_message(source_addr: str, output_file, timeout: int) -> None:
-        """
-        Listens for packets from the source address and decodes the encoded message.
-        :param source_addr: Source address of the message.
-        :param output_file: FIle to write message to.
-        :param timeout: Timeout in seconds.
-        :return:
-        """
-        sniff(prn=lambda packet: packet_callback(packet, source_addr, output_file), timeout=timeout)
+def packet_callback(pkt, source_addr, output_file) -> None:
+    """
+    Callback method to perform packet filtering using scapy sniff function.
+    :param pkt: Packet from sniff stream.
+    :param source_addr: Source address of the message.
+    :param output_file: File to write message to.
+    """
+    if IP in pkt and pkt[IP].src == source_addr:
+        print(f'Receiving Data: {decode_to_ascii(pkt[IP].option)}')
+        with open(output_file, 'a') as buffer:
+            buffer.write(f'Receiving Data: {decode_to_ascii(pkt[IP].option)}\n')
+
+def receive_message(source_addr: str, output_file, timeout: int) -> None:
+    """
+    Listens for packets from the source address and decodes the encoded message.
+    :param source_addr: Source address of the message.
+    :param output_file: FIle to write message to.
+    :param timeout: Timeout in seconds.
+    :return:
+    """
+    sniff(prn=lambda packet: packet_callback(packet, source_addr, output_file), timeout=timeout)
+
+
+if __name__ == "__main__":
+    main()
