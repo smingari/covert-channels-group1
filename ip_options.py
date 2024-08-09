@@ -65,7 +65,8 @@ def main() -> None:
         print(f'Source Host: {source_addr}')
         print(f'Encoding file: {encoding_file}')
         print(f'Covert Channel Method: IP Options')
-        # receive_message(source_addr=source_addr, output_file=encoding_file, timeout=args.timeout)
+        receive_message(source_addr=source_addr, output_file=encoding_file, timeout=args.timeout)
+
 
 def encode_to_hex(characters: chr) -> hex:
     """
@@ -78,6 +79,7 @@ def encode_to_hex(characters: chr) -> hex:
     return str.encode(characters)
     # return hex(ord(character))
 
+
 def decode_to_ascii(num: int) -> chr:
     """
     Decode integer into ASCII characters.
@@ -87,6 +89,7 @@ def decode_to_ascii(num: int) -> chr:
     # TODO implement decoding scheme
 
     return ''.join(chr(int(num)))
+
 
 def send_message(destination_addr: str, source_addr: str, file) -> None:
     """
@@ -105,17 +108,16 @@ def send_message(destination_addr: str, source_addr: str, file) -> None:
             encoded_id = encode_to_hex(char)
             print(encoded_id)
             # TODO come up with encoding method
-            # length calc = 4 for Option settings + (4 x length of message)
             encode_options = IPOption(copy_flag=1, optclass=0, option=8, length=4, value=encoded_id)
             encoded_packet = IP(dst=destination_addr, src=source_addr, id=0x1011, options=encode_options)
             print(f"before padding: {len(encoded_packet)}")
-            if len(encoded_packet) % 32 != 0:
-                extra_bits = len(encoded_packet) % 32
-                pad = Padding()
-                pad.load = '\x00' * (32 - extra_bits)
-                encoded_packet = encoded_packet/pad
-                print(encoded_packet.fields)
-                print(f"after padding: {len(encoded_packet)}")
+            # if len(encoded_packet) % 32 != 0:
+            #     extra_bits = len(encoded_packet) % 32
+            #     pad = Padding()
+            #     pad.load = '\x00' * (32 - extra_bits)
+            #     encoded_packet = encoded_packet/pad
+            #     print(encoded_packet.fields)
+            #     print(f"after padding: {len(encoded_packet)}")
 
             send(encoded_packet, verbose=VERBOSE)
             index += 1
@@ -127,10 +129,13 @@ def packet_callback(pkt, source_addr, output_file) -> None:
     :param source_addr: Source address of the message.
     :param output_file: File to write message to.
     """
-    if IP in pkt and pkt[IP].src == source_addr:
-        print(f'Receiving Data: {decode_to_ascii(pkt[IP].option)}')
-        with open(output_file, 'a') as buffer:
-            buffer.write(f'Receiving Data: {decode_to_ascii(pkt[IP].option)}\n')
+    if IP in pkt and pkt[IP].src == source_addr and pkt[IP].options is not None:
+        print(f'Receiving Data: {pkt[IP].options[0].security}')
+        print(f'Hex value: {bytes.fromhex(hex(pkt[IP].options[0].security).lstrip("0x")).decode("utf-8")}')
+        # print(f'Receiving Data: {pkt.show()}')
+        # with open(output_file, 'a') as buffer:
+        #     buffer.write(f'Receiving Data: {decode_to_ascii(pkt[IP].options)}\n')
+
 
 def receive_message(source_addr: str, output_file, timeout: int) -> None:
     """
