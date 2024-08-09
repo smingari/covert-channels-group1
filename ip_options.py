@@ -67,14 +67,16 @@ def main() -> None:
         print(f'Covert Channel Method: IP Options')
         # receive_message(source_addr=source_addr, output_file=encoding_file, timeout=args.timeout)
 
-def encode_to_hex(character: chr) -> int:
+def encode_to_hex(characters: chr) -> hex:
     """
     Encodes ASCII characters into a bit integer.
     :param character: To convert into an integer.
     :return: bit integer.
     """
     # TODO implement encoding scheme
-    return ord(character)
+    # return b''.join([bytes([ord(c)]) for c in characters])
+    return str.encode(characters)
+    # return hex(ord(character))
 
 def decode_to_ascii(num: int) -> chr:
     """
@@ -96,13 +98,15 @@ def send_message(destination_addr: str, source_addr: str, file) -> None:
     index = 0
     with open(file, 'r') as buffer:
         while True:
-            char = buffer.read(1)
+            char = buffer.read(2)
             if not char:
                 break
             print(f'Sending data: {char}')
             encoded_id = encode_to_hex(char)
+            print(encoded_id)
             # TODO come up with encoding method
-            encode_options = IPOption(copy_flag=1, optclass=0, option=7, length=4+9*4, value=b'\x00' * 36)
+            # length calc = 4 for Option settings + (4 x length of message)
+            encode_options = IPOption(copy_flag=1, optclass=0, option=8, length=4, value=encoded_id)
             encoded_packet = IP(dst=destination_addr, src=source_addr, id=0x1011, options=encode_options)
             print(f"before padding: {len(encoded_packet)}")
             if len(encoded_packet) % 32 != 0:
