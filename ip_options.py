@@ -68,27 +68,52 @@ def main() -> None:
         receive_message(source_addr=source_addr, output_file=encoding_file, timeout=args.timeout)
 
 
-def encode_to_hex(characters: chr) -> hex:
+def caesar_cipher(character: chr, key: int) -> chr:
+    """
+    :param character:
+    :param key:
+    :return:
+    """
+    ciphered = ""
+    if key < 0:
+        raise Exception("invalid key.")
+    key = key % 26
+    # Special characters that do not get ciphered (".", ",", " ")
+    if ord(character) in [00, 32, 33, 44, 46]:
+        ciphered += chr(ord(character))
+    elif character.islower():
+        ciphered += chr((ord(character) + key - 97) % 26 + 97)
+    else:
+        ciphered += chr((ord(character) + key - 65) % 26 + 65)
+
+    return ciphered
+
+
+def encode_to_hex(characters: chr, key: int) -> hex:
     """
     Encodes ASCII characters into a bit integer.
     :param character: To convert into an integer.
     :return: bit integer.
     """
-    # TODO implement encoding scheme
-    # return b''.join([bytes([ord(c)]) for c in characters])
-    return str.encode(characters)
+    ciphered = ''
+    for character in characters:
+        ciphered += caesar_cipher(character, key)
+    return str.encode(ciphered)
     # return hex(ord(character))
 
 
-def decode_to_ascii(num: int) -> chr:
+def decode_to_ascii(cipher: hex, key: int) -> str:
     """
     Decode integer into ASCII characters.
     :param num: integer.
     :return: ASCII Character.
     """
     # TODO implement decoding scheme
-
-    return ''.join(chr(int(num)))
+    decode = ''
+    characters = bytes.fromhex(cipher).decode("utf-8")
+    for character in characters:
+        decode += caesar_cipher(character, 26 - (key % 26))
+    return decode
 
 
 def send_message(destination_addr: str, source_addr: str, file) -> None:
@@ -105,12 +130,11 @@ def send_message(destination_addr: str, source_addr: str, file) -> None:
             if not char:
                 break
             print(f'Sending data: {char}')
-            encoded_id = encode_to_hex(char)
+            encoded_id = encode_to_hex(char, 533)
             print(encoded_id)
             # TODO come up with encoding method
             encode_options = IPOption(copy_flag=1, optclass=0, option=8, length=4, value=encoded_id)
             encoded_packet = IP(dst=destination_addr, src=source_addr, id=0x1011, options=encode_options)
-            print(f"before padding: {len(encoded_packet)}")
             # if len(encoded_packet) % 32 != 0:
             #     extra_bits = len(encoded_packet) % 32
             #     pad = Padding()
@@ -131,7 +155,9 @@ def packet_callback(pkt, source_addr, output_file) -> None:
     """
     if IP in pkt and pkt[IP].src == source_addr and pkt[IP].options is not None:
         print(f'Receiving Data: {pkt[IP].options[0].security}')
-        print(f'Hex value: {bytes.fromhex(hex(pkt[IP].options[0].security).lstrip("0x")).decode("utf-8")}')
+        # print(f'Hex value: {bytes.fromhex(hex(pkt[IP].options[0].security).lstrip("0x")).decode("utf-8")}')
+        # print(f'Hex value: {bytes.fromhex(hex(pkt[IP].options[0].security).lstrip("0x")).decode("utf-8")}')
+        print(f'Decoding: {decode_to_ascii(hex(pkt[IP].options[0].security).lstrip("0x"), 533)}')
         # print(f'Receiving Data: {pkt.show()}')
         # with open(output_file, 'a') as buffer:
         #     buffer.write(f'Receiving Data: {decode_to_ascii(pkt[IP].options)}\n')
