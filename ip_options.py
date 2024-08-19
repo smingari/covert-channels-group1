@@ -150,12 +150,19 @@ def packet_callback(pkt, source_addr, key, output_file: None) -> None:
     :param key: Secret key
     :param output_file: File to write message to.
     """
-    if IP in pkt and pkt[IP].src == source_addr and pkt[IP].options is not None:
-        decoded_data = decode_to_ascii(hex(pkt[IP].options[0].security).lstrip("0x"), key)
-        print(f'Decoding: {decoded_data}')
-        if output_file is not None:
-            with open(output_file, 'a') as buffer:
-                buffer.write(decoded_data)
+    if IP in pkt and pkt[IP].src == source_addr:
+        if pkt[IP].options:
+            for option in pkt[IP].options:
+                if option.option == 8:
+                    encoded_data = option.security
+                    try:
+                        decoded_data = decode_to_ascii(hex(encoded_data).lstrip("0x"), key)
+                        print(f'Decoding: {decoded_data}')
+                        if output_file is not None:
+                            with open(output_file, 'a') as buffer:
+                                buffer.write(decoded_data)
+                    except Exception as e:
+                        print(f"Error decoding data: {e}")
 
 
 def receive_message(source_addr: str, key: int, output_file: None, timeout: int) -> None:
